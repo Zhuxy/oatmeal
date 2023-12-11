@@ -293,7 +293,40 @@ fn build() -> Command {
                 .num_args(1)
                 .help("OpenAI API token when using the OpenAI backend")
                 .global(true),
-        );
+        )
+        .arg(
+            Arg::new("azureai-url")
+                .long("azureai-url")
+                .env("OATMEAL_AZUREAI_URL")
+                .num_args(1)
+                .help("Azure AI API URL when using the Azure AI backend.")
+                .global(true),
+        )
+        .arg(
+            Arg::new("azureai-api-key")
+                .long("azureai-api-key")
+                .env("OATMEAL_AZUREAI_API_KEY")
+                .num_args(1)
+                .help("Azure AI API KEY when using the Azure AI backend.")
+                .global(true),
+        )
+        .arg(
+            Arg::new("azureai-api-version")
+                .long("azureai-api-version")
+                .env("OATMEAL_AZUREAI_API_VERSION")
+                .num_args(1)
+                .help("Azure AI API VERSION when using the Azure AI backend.")
+                .global(true),
+        )
+        .arg(
+            Arg::new("azureai-deployment-id")
+                .long("azureai-deployment-id")
+                .env("OATMEAL_AZUREAI_DEPLOYMENT_ID")
+                .num_args(1)
+                .help("Azure AI DEPLOYMENT ID when using the Azure AI backend.")
+                .global(true),
+        )
+        ;
 }
 
 pub async fn parse() -> Result<bool> {
@@ -393,6 +426,22 @@ pub async fn parse() -> Result<bool> {
 
     if let Some(openai_token) = matches.get_one::<String>("openai-token") {
         Config::set(ConfigKey::OpenAIToken, openai_token);
+    }
+
+    if let Some(azureai_url) = matches.get_one::<String>("azureai-url") {
+        Config::set(ConfigKey::AzureAIURL, azureai_url);
+    }
+    
+    if let Some(azureai_api_key) = matches.get_one::<String>("azureai-api-key") {
+        Config::set(ConfigKey::AzureAIAPIKey, azureai_api_key);
+    }
+
+    if let Some(azureai_api_version) = matches.get_one::<String>("azureai-api-version") {
+        Config::set(ConfigKey::AzureAIAPIVersion, azureai_api_version);
+    }
+
+    if let Some(azureai_deployment_id) = matches.get_one::<String>("azureai-deployment-id") {
+        Config::set(ConfigKey::AzureAIDeploymentID, azureai_deployment_id);
     }
 
     tracing::debug!(

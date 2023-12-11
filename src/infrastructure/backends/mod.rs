@@ -1,5 +1,6 @@
 pub mod ollama;
 pub mod openai;
+pub mod azureai;
 use anyhow::bail;
 use anyhow::Result;
 
@@ -19,6 +20,9 @@ impl BackendManager {
             return Ok(Box::<openai::OpenAI>::default());
         }
 
+        if name == "azureai" {
+            return Ok(Box::<azureai::AzureAI>::default());
+        }
         bail!(format!("No backend implemented for {name}"))
     }
 }
