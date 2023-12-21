@@ -90,10 +90,10 @@ async fn it_gets_completions() -> Result<()> {
 
 #[tokio::test]
 async fn azure_test() -> Result<()> {
-    let url = "https://wm-openai-app.openai.azure.com";
-    let deployment_id = "gpt-35-turbo";
-    let api_version = "2023-05-15";
-    let api_key = "15aa995d1b7240ba8e73b3f006674354";
+    let url = std::env::var("OATMEAL_AZUREAI_URL").unwrap();
+    let api_key = std::env::var("OATMEAL_AZUREAI_API_KEY").unwrap();
+    let api_version = std::env::var("OATMEAL_AZUREAI_API_VERSION").unwrap();
+    let deployment_id = std::env::var("OATMEAL_AZUREAI_DEPLOYMENT_ID").unwrap();
 
     let url = format!("{url}/openai/deployments/{deploymentId}/chat/completions?api-version={apiVersion}", 
                 url = url,
@@ -103,11 +103,11 @@ async fn azure_test() -> Result<()> {
     println!("{:?}", url);
 
 
-    let mut messages: Vec<MessageRequest> = vec![];
-    messages.push(MessageRequest {
-        role: "user".to_string(),
-        content: "hello".to_string(),
-    });
+    let messages: Vec<MessageRequest> = vec![
+        MessageRequest {
+            role: "user".to_string(),
+            content: "hello".to_string(),
+        }];
 
     let req = CompletionRequest {
         model: "gpt-35-turbo".to_string(),
