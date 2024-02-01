@@ -22,6 +22,9 @@ fn print_numbers() {
 And in Javascript.
 
 ```javascript
+// Hello World.
+
+// This is a really long line that pushes the boundaries of 50 characters across the screen, resulting in a code comment block where the line is wrapped to the next line. Cool right?
 function printNumbers() {
     let numbers = [];
     for (let i = 0; i <= 10; i++) {
@@ -31,7 +34,7 @@ function printNumbers() {
 }
 ```
 
-This is a markdown codeblock that has no language, so it should not be included.
+This is a markdown codeblock that has no language. We count it as well incase an LLM doesn't attach a language.
 
 ```
 abc123

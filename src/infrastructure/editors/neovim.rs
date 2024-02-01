@@ -6,9 +6,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as b64;
 use base64::Engine;
+use serde::Deserialize;
 use serde::Deserializer;
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
+use serde::Serialize;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -16,6 +16,7 @@ use tokio::process::Command;
 use crate::domain::models::AcceptType;
 use crate::domain::models::Editor;
 use crate::domain::models::EditorContext;
+use crate::domain::models::EditorName;
 
 fn base64_to_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Error> {
     let val = match serde::de::Deserialize::deserialize(deserializer)? {
@@ -88,6 +89,10 @@ pub struct Neovim {}
 
 #[async_trait]
 impl Editor for Neovim {
+    fn name(&self) -> EditorName {
+        return EditorName::Neovim;
+    }
+
     #[allow(clippy::implicit_return)]
     async fn health_check(&self) -> Result<()> {
         if env::var("NVIM").is_err() {

@@ -8,16 +8,17 @@ use anyhow::bail;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc;
 use tokio_util::io::StreamReader;
 
-use crate::config::Config;
-use crate::config::ConfigKey;
+use crate::configuration::Config;
+use crate::configuration::ConfigKey;
 use crate::domain::models::Author;
 use crate::domain::models::Backend;
+use crate::domain::models::BackendName;
 use crate::domain::models::BackendPrompt;
 use crate::domain::models::BackendResponse;
 use crate::domain::models::Event;
@@ -53,23 +54,29 @@ struct ModelListResponse {
 
 pub struct Ollama {
     url: String,
+    timeout: String,
 }
 
 impl Default for Ollama {
     fn default() -> Ollama {
         return Ollama {
             url: Config::get(ConfigKey::OllamaURL),
+            timeout: Config::get(ConfigKey::BackendHealthCheckTimeout),
         };
     }
 }
 
 #[async_trait]
 impl Backend for Ollama {
+    fn name(&self) -> BackendName {
+        return BackendName::Ollama;
+    }
+
     #[allow(clippy::implicit_return)]
     async fn health_check(&self) -> Result<()> {
         let res = reqwest::Client::new()
             .get(&self.url)
-            .timeout(Duration::from_millis(200))
+            .timeout(Duration::from_millis(self.timeout.parse::<u64>()?))
             .send()
             .await;
 

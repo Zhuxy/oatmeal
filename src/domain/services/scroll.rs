@@ -39,21 +39,32 @@ impl Scroll {
         }
     }
 
-    pub fn last(&mut self) {
-        self.position = 0;
+    fn get_position_as_if_last(&self) -> usize {
+        let mut position = 0;
         if self.list_length > self.viewport_length {
-            self.position = self.list_length - self.viewport_length;
+            position = self.list_length - self.viewport_length;
         }
+        return position;
+    }
 
+    pub fn is_position_at_last(&self) -> bool {
+        return self.position == self.get_position_as_if_last();
+    }
+
+    pub fn last(&mut self) {
+        self.position = self.get_position_as_if_last();
         self.scrollbar_state.last();
     }
 
     pub fn set_state(&mut self, list_length: usize, viewport_length: usize) {
         self.list_length = list_length;
         self.viewport_length = viewport_length;
-        self.scrollbar_state = self
-            .scrollbar_state
-            .content_length(list_length)
-            .viewport_content_length(viewport_length);
+
+        let mut content_length = list_length.saturating_sub(viewport_length);
+        if content_length == 0 {
+            content_length = 1;
+        }
+
+        self.scrollbar_state = self.scrollbar_state.content_length(content_length);
     }
 }

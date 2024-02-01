@@ -19,11 +19,13 @@ use ratatui::widgets::ScrollbarOrientation;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
 
-use crate::config::Config;
-use crate::config::ConfigKey;
+use crate::configuration::Config;
+use crate::configuration::ConfigKey;
 use crate::domain::models::Action;
 use crate::domain::models::Author;
+use crate::domain::models::BackendName;
 use crate::domain::models::BackendPrompt;
+use crate::domain::models::EditorName;
 use crate::domain::models::Event;
 use crate::domain::models::Loading;
 use crate::domain::models::Message;
@@ -31,7 +33,10 @@ use crate::domain::models::SlashCommand;
 use crate::domain::models::TextArea;
 use crate::domain::services::events::EventsService;
 use crate::domain::services::AppState;
+use crate::domain::services::AppStateProps;
 use crate::domain::services::Bubble;
+use crate::domain::services::Sessions;
+use crate::infrastructure::backends::BackendManager;
 use crate::infrastructure::editors::EditorManager;
 
 /// Verifies that the current window size is large enough to handle the bare
@@ -43,9 +48,9 @@ fn is_line_width_sufficient(line_width: u16) -> bool {
         .max()
         .unwrap();
 
-    let bubble_style = Bubble::style_confg();
+    let bubble_style = Bubble::style_config();
     let min_width =
-        (author_lengths + bubble_style.magic_spacing + bubble_style.border_elements_length) as i32;
+        (author_lengths + bubble_style.bubble_padding + bubble_style.border_elements_length) as i32;
     let trimmed_line_width =
         ((line_width as f32 * (1.0 - bubble_style.outer_padding_percentage)).ceil()) as i32;
 
@@ -54,17 +59,18 @@ fn is_line_width_sufficient(line_width: u16) -> bool {
 
 async fn start_loop<B: Backend>(
     terminal: &mut Terminal<B>,
-    app_state: &mut AppState<'_>,
+    app_state_props: AppStateProps,
     tx: mpsc::UnboundedSender<Action>,
     rx: mpsc::UnboundedReceiver<Event>,
 ) -> Result<()> {
     let mut events = EventsService::new(rx);
     let mut textarea = TextArea::default();
+    let mut app_state = AppState::new(app_state_props).await?;
     let loading = Loading::default();
 
     #[cfg(feature = "dev")]
     {
-        let test_str = "Write a function in Java that prints from 0 to 10. Return in markdown, add language to code blocks, describe the example before and after.";
+        let test_str = "Write a function in Java that prints from 0 to 10. Describe the example before and after.";
         textarea.insert_str(test_str);
     }
 
@@ -90,9 +96,12 @@ async fn start_loop<B: Backend>(
                 app_state.set_rect(layout[0]);
             }
 
-            app_state
-                .bubble_list
-                .render(frame, layout[0], app_state.scroll.position);
+            app_state.bubble_list.render(
+                layout[0],
+                frame.buffer_mut(),
+                app_state.scroll.position.try_into().unwrap(),
+            );
+
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight),
                 layout[0].inner(&Margin {
@@ -119,6 +128,7 @@ async fn start_loop<B: Backend>(
 
                 let (should_break, should_continue) =
                     app_state.handle_slash_commands(input_str, &tx)?;
+
                 if should_break {
                     break;
                 }
@@ -132,7 +142,7 @@ async fn start_loop<B: Backend>(
 
                 if app_state.backend_context.is_empty() && SlashCommand::parse(&input_str).is_none()
                 {
-                    prompt.append_system_prompt(&app_state.editor_context);
+                    prompt.append_chat_context(&app_state.editor_context);
                 }
 
                 tx.send(Action::BackendRequest(prompt))?;
@@ -260,23 +270,29 @@ pub async fn start(
     )?;
     let term_backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(term_backend)?;
-    let editor_name = Config::get(ConfigKey::Editor);
-    let mut app_state = AppState::new(
-        &Config::get(ConfigKey::Backend),
-        &editor_name,
-        &Config::get(ConfigKey::Model),
-        &Config::get(ConfigKey::Theme),
-        &Config::get(ConfigKey::ThemeFile),
-        &Config::get(ConfigKey::SessionID),
-    )
-    .await?;
+    let editor_name = EditorName::parse(Config::get(ConfigKey::Editor)).unwrap();
+    let mut session_id = None;
+    if !Config::get(ConfigKey::SessionID).is_empty() {
+        session_id = Some(Config::get(ConfigKey::SessionID));
+    }
 
-    start_loop(&mut terminal, &mut app_state, tx, rx).await?;
-    if !editor_name.is_empty() {
-        let editor = EditorManager::get(&editor_name)?;
-        if editor.health_check().await.is_ok() {
-            editor.clear_context().await?;
-        }
+    let backend =
+        BackendManager::get(BackendName::parse(Config::get(ConfigKey::Backend)).unwrap())?;
+    let editor = EditorManager::get(EditorName::parse(Config::get(ConfigKey::Editor)).unwrap())?;
+    let app_state_pros = AppStateProps {
+        backend,
+        editor,
+        model_name: Config::get(ConfigKey::Model),
+        theme_name: Config::get(ConfigKey::Theme),
+        theme_file: Config::get(ConfigKey::ThemeFile),
+        session_id,
+        sessions_service: Sessions::default(),
+    };
+
+    start_loop(&mut terminal, app_state_pros, tx, rx).await?;
+    let editor = EditorManager::get(editor_name)?;
+    if editor.health_check().await.is_ok() {
+        editor.clear_context().await?;
     }
 
     disable_raw_mode()?;

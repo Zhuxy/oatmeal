@@ -5,17 +5,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: x86_64-unknown-linux-gnu
+          targets: x86_64-unknown-linux-gnu
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
       - name: Build
         run: |
           cargo build --release --target x86_64-unknown-linux-gnu
+          ./target/x86_64-unknown-linux-gnu/release/oatmeal --help
       - name: Upload
         uses: actions/upload-artifact@v2
         with:
@@ -34,13 +33,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: aarch64-unknown-linux-gnu
+          targets: aarch64-unknown-linux-gnu
       - name: Build
         run: |
+          sudo apt-get update
           sudo apt-get install gcc-aarch64-linux-gnu
           rustup target add aarch64-unknown-linux-gnu
           cargo install cargo-run-bin
@@ -53,15 +51,67 @@ jobs:
             target/aarch64-unknown-linux-gnu/release/oatmeal
             target/aarch64-unknown-linux-gnu/release/oatmeal.dwp
 
+  linux-amd-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ".bin"
+      - name: Build
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          cargo install cargo-run-bin
+          cargo zigbuild --release --target x86_64-unknown-linux-musl
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+          name: x86_64-unknown-linux-musl
+          path: |
+            target/x86_64-unknown-linux-musl/release/oatmeal
+            target/x86_64-unknown-linux-musl/release/oatmeal.dwp
+
+  linux-arm-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ".bin"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl
+      - name: Build
+        run: |
+          sudo apt-get update
+          sudo apt-get install gcc-aarch64-linux-gnu
+          rustup target add aarch64-unknown-linux-musl
+          cargo install cargo-run-bin
+          cargo zigbuild --release --target aarch64-unknown-linux-musl
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+          name: aarch64-unknown-linux-musl
+          path: |
+            target/aarch64-unknown-linux-musl/release/oatmeal
+            target/aarch64-unknown-linux-musl/release/oatmeal.dwp
+
   macos-amd:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          target: x86_64-apple-darwin
-          toolchain: stable
+          targets: x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
@@ -72,6 +122,7 @@ jobs:
           cp -r "$(readlink oatmeal.dSYM)" symbols
           rm oatmeal.dSYM
           mv symbols oatmeal.dSYM
+          ./oatmeal --help
       - name: Upload
         uses: actions/upload-artifact@v2
         with:
@@ -84,22 +135,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.11.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: aarch64-apple-darwin
+          targets: aarch64-apple-darwin
       - name: Build
         run: |
           rustup target add aarch64-apple-darwin
-          cargo install cargo-run-bin
-          cargo zigbuild --release --target aarch64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
           cd target/aarch64-apple-darwin/release
           cp -r "$(readlink oatmeal.dSYM)" symbols
           rm oatmeal.dSYM
@@ -116,45 +161,42 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
       - name: Build
         run: |
-          cargo build --release --target x86_64-pc-windows-msvc
+          cargo build --profile release-windows --target x86_64-pc-windows-msvc
+          .\target\x86_64-pc-windows-msvc\release-windows\oatmeal.exe --help
       - name: Upload
         uses: actions/upload-artifact@v2
         with:
           name: x86_64-pc-windows-msvc
           path: |
-            target/x86_64-pc-windows-msvc/release/oatmeal.exe
-            target/x86_64-pc-windows-msvc/release/oatmeal.pdb
+            target/x86_64-pc-windows-msvc/release-windows/oatmeal.exe
+            target/x86_64-pc-windows-msvc/release-windows/oatmeal.pdb
 
   windows-arm:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: aarch64-pc-windows-msvc
+          targets: aarch64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
       - name: Build
         run: |
           rustup target add aarch64-pc-windows-msvc
-          cargo build --release --target aarch64-pc-windows-msvc
+          cargo build --profile release-windows --target aarch64-pc-windows-msvc
       - name: Upload
         uses: actions/upload-artifact@v2
         with:
           name: aarch64-pc-windows-msvc
           path: |
-            target/aarch64-pc-windows-msvc/release/oatmeal.exe
-            target/aarch64-pc-windows-msvc/release/oatmeal.pdb
+            target/aarch64-pc-windows-msvc/release-windows/oatmeal.exe
+            target/aarch64-pc-windows-msvc/release-windows/oatmeal.pdb

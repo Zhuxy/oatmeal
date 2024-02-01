@@ -15,11 +15,14 @@
   - [Fedora / CentOS](#fedora--centos)
   - [Nix](#nix)
   - [Arch Linux](#arch-linux)
+  - [Alpine Linux](#alpine-linux)
   - [Windows](#windows)
   - [Cargo](#cargo)
+  - [Docker](#docker)
   - [Manual](#manual)
   - [Source](#source)
 - [Usage](#Usage)
+  - [Configuration](#configuration)
   - [Backends](#backends)
   - [Editors](#editors)
   - [Themes](#themes)
@@ -82,6 +85,18 @@ nix-env -f '<nixpkgs>' -iA nur.repos.dustinblackman.oatmeal
 yay -S oatmeal-bin
 ```
 
+### Alpine Linux
+
+<!-- alpine-install start -->
+
+```sh
+arch=$(uname -a | grep -q aarch64 && echo 'arm64' || echo 'amd64')
+curl -L -o oatmeal.apk "https://github.com/dustinblackman/oatmeal/releases/download/v0.12.4/oatmeal_0.12.4_linux_${arch}.apk"
+apk add --allow-untrusted ./oatmeal.apk
+```
+
+<!-- alpine-install end -->
+
 ### Windows
 
 **Chocolatey**
@@ -89,7 +104,7 @@ yay -S oatmeal-bin
 <!-- choco-install start -->
 
 ```sh
-choco install oatmeal --version=0.7.3
+choco install oatmeal --version=0.12.4
 ```
 
 <!-- choco-install end -->
@@ -101,10 +116,22 @@ scoop bucket add dustinblackman https://github.com/dustinblackman/scoop-bucket.g
 scoop install oatmeal
 ```
 
+**Winget**
+
+```sh
+winget install -e --id dustinblackman.oatmeal
+```
+
 ### Cargo
 
 ```sh
-cargo install oatmeal
+cargo install oatmeal --locked
+```
+
+### Docker
+
+```sh
+docker run --rm -it ghcr.io/dustinblackman/oatmeal:latest
 ```
 
 ### Manual
@@ -123,8 +150,7 @@ mv ./target/release/oatmeal /usr/local/bin/
 
 ## Usage
 
-Oatmeal allows customizing configuration either through command line parameters, or more permanently with environment
-variables. By default, Ollama is the selected backend, `llama2:latest` as the default model, and the `clipboard` integration for an editor.
+The following shows the availabe options to start a chat session. By default when running `oatmeal`, Ollama is the selected backend, and the `clipboard` integration for an editor.
 See `oatmeal --help`, `/help` in chat, or the output below to get all the details.
 
 <!-- command-help start -->
@@ -132,43 +158,61 @@ See `oatmeal --help`, `/help` in chat, or the output below to get all the detail
 ```
 Terminal UI to chat with large language models (LLM) using different model backends, and direct integrations with your favourite editors!
 
-Version: 0.7.3
-Commit: v0.7.3
+Version: 0.12.4
+Commit: v0.12.4
 
 Usage: oatmeal [OPTIONS] [COMMAND]
 
 Commands:
-  chat         Start a new chat session
-  completions  Generates shell completions
-  sessions     Manage past chat sessions
+  chat         Start a new chat session.
+  completions  Generates shell completions.
+  config       Configuration file options.
+  manpages     Generates manpages and outputs to stdout.
+  sessions     Manage past chat sessions.
   help         Print this message or the help of the given subcommand(s)
 
 Options:
-  -b, --backend <backend>            The initial backend hosting a model to connect to. [Possible values: ollama, openai] [env: OATMEAL_BACKEND=] [default: ollama]
-  -m, --model <model>                The initial model on a backend to consume [env: OATMEAL_MODEL=] [default: llama2:latest]
-  -e, --editor <editor>              The editor to integrate with. [Possible values: clipboard, neovim] [env: OATMEAL_EDITOR=] [default: clipboard]
-  -t, --theme <theme>                Sets code syntax highlighting theme. [Possible values: base16-onedark, base16-seti, base16-monokai, base16-github, base16-one-light] [env: OATMEAL_THEME=] [default: base16-onedark]
-      --theme-file <theme-file>      Absolute path to a TextMate tmTheme to use for code syntax highlighting [env: OATMEAL_THEME_FILE=]
-      --ollama-url <ollama-url>      Ollama API URL when using the Ollama backend [env: OATMEAL_OLLAMA_URL=] [default: http://localhost:11434]
-      --openai-url <openai-url>      OpenAI API URL when using the OpenAI backend. Can be swapped to a compatiable proxy [env: OATMEAL_OPENAI_URL=] [default: https://api.openai.com]
-      --openai-token <openai-token>  OpenAI API token when using the OpenAI backend [env: OATMEAL_OPENAI_TOKEN=]
-  -h, --help                         Print help
-  -V, --version                      Print version
+  -b, --backend <backend>
+          The initial backend hosting a model to connect to. [default: ollama] [env: OATMEAL_BACKEND=] [possible values: langchain, ollama, openai]
+      --backend-health-check-timeout <backend-health-check-timeout>
+          Time to wait in milliseconds before timing out when doing a healthcheck for a backend. [default: 1000] [env: OATMEAL_BACKEND_HEALTH_CHECK_TIMEOUT=]
+  -m, --model <model>
+          The initial model on a backend to consume. Defaults to the first model available from the backend if not set. [env: OATMEAL_MODEL=]
+  -c, --config-file <config-file>
+          Path to configuration file [default: ~/.config/oatmeal/config.toml] [env: OATMEAL_CONFIG_FILE=]
+  -e, --editor <editor>
+          The editor to integrate with. [default: clipboard] [env: OATMEAL_EDITOR=] [possible values: neovim, clipboard, none]
+  -t, --theme <theme>
+          Sets code syntax highlighting theme. [default: base16-onedark] [env: OATMEAL_THEME=] [possible values: base16-github, base16-monokai, base16-one-light, base16-onedark, base16-seti]
+      --theme-file <theme-file>
+          Absolute path to a TextMate tmTheme to use for code syntax highlighting. [env: OATMEAL_THEME_FILE=]
+      --lang-chain-url <lang-chain-url>
+          LangChain Serve API URL when using the LangChain backend. [default: http://localhost:8000] [env: OATMEAL_LANGCHAIN_URL=]
+      --ollama-url <ollama-url>
+          Ollama API URL when using the Ollama backend. [default: http://localhost:11434] [env: OATMEAL_OLLAMA_URL=]
+      --open-ai-url <open-ai-url>
+          OpenAI API URL when using the OpenAI backend. Can be swapped to a compatible proxy. [default: https://api.openai.com] [env: OATMEAL_OPENAI_URL=]
+      --open-ai-token <open-ai-token>
+          OpenAI API token when using the OpenAI backend. [env: OATMEAL_OPENAI_TOKEN=]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 
 CHAT COMMANDS:
   - /modellist (/ml) - Lists all available models from the backend.
-  - /model (/model) [MODEL_NAME,MODEL_INDEX] - Sets the specified model as the active model. You can pass either the model name, or the index from /modellist
+  - /model (/model) [MODEL_NAME,MODEL_INDEX] - Sets the specified model as the active model. You can pass either the model name, or the index from `/modellist`.
   - /append (/a) [CODE_BLOCK_NUMBER?] - Appends code blocks to an editor. See Code Actions for more details.
   - /replace (/r) [CODE_BLOCK_NUMBER?] - Replaces selections with code blocks in an editor. See Code Actions for more details.
-  - /copy (/c) [CODE_BLOCK_NUMBER?] - Copies the entire chat history to your clipboard. When a CODE_BLOCK_NUMBER is used, only the specified copy blocks are copied to clipboard. See Code Actions for more details.
+  - /copy (/c) [CODE_BLOCK_NUMBER?] - Copies the entire chat history to your clipboard. When a `CODE_BLOCK_NUMBER` is used, only the specified copy blocks are copied to clipboard. See Code Actions for more details.
   - /quit /exit (/q) - Exit Oatmeal.
   - /help (/h) - Provides this help menu.
 
 CHAT HOTKEYS:
-  - Up arrow - Scroll up
-  - Down arrow - Scroll down
-  - CTRL+U - Page up
-  - CTRL+D - Page down
+  - Up arrow - Scroll up.
+  - Down arrow - Scroll down.
+  - CTRL+U - Page up.
+  - CTRL+D - Page down.
   - CTRL+C - Interrupt waiting for prompt response if in progress, otherwise exit.
   - CTRL+R - Resubmit your last message to the backend.
 
@@ -177,9 +221,9 @@ When working with models that provide code, and using an editor integration, Oat
 
   - /append (/a) [CODE_BLOCK_NUMBER?] will append one-to-many model provided code blocks to the open file in your editor.
   - /replace (/r) [CODE_BLOCK_NUMBER?] - will replace selected code in your editor with one-to-many model provided code blocks.
-  - /copy (/c) [CODE_BLOCK_NUMBER?] - will append one-to-many model provided code blocks to your clipboard, no matter the editor integration being used.
+  - /copy (/c) [CODE_BLOCK_NUMBER?] - Copies the entire chat history to your clipboard. When a `CODE_BLOCK_NUMBER` is used it will append one-to-many model provided code blocks to your clipboard, no matter the editor integration.
 
-The CODE_BLOCK_NUMBER allows you to select several code blocks to send back to your editor at once. The parameter can be set as follows:
+The `CODE_BLOCK_NUMBER` allows you to select several code blocks to send back to your editor at once. The parameter can be set as follows:
   - `1` - Selects the first code block
   - `1,3,5` - Selects code blocks 1, 3, and 5.
   - `2..5`- Selects an inclusive range of code blocks between 2 and 5.
@@ -188,12 +232,35 @@ The CODE_BLOCK_NUMBER allows you to select several code blocks to send back to y
 
 <!-- command-help end -->
 
+### Configuration
+
+On top of being configurable with command flags and environment variables, Oatmeal is also manageable with a
+configuration file such as [this example](./config.example.toml). You can run `oatmeal config create` to initialize for
+the first time.
+
+<!-- command-config start -->
+
+```
+Configuration file options.
+
+Usage: oatmeal config [OPTIONS] [COMMAND]
+
+Commands:
+  create   Saves the default config file to the configuration file path. This command will fail if the file exists already.
+  default  Outputs the default configuration file to stdout.
+  path     Returns the default path for the configuration file.
+  help     Print this message or the help of the given subcommand(s)
+```
+
+<!-- command-config end -->
+
 ### Backends
 
 The following model backends are supported:
 
-- [OpenAI](https://chat.openai.com)
+- [OpenAI](https://chat.openai.com) (Or any compatible proxy/API)
 - [Ollama](https://github.com/jmorganca/ollama)
+- [LangChain/LangServe](https://python.langchain.com/docs/langserve) (Experimental)
 
 ### Editors
 
@@ -201,14 +268,14 @@ The following editors are currently supported. The `clipboard` editor is a speci
 are simply copied to your clipboard. This is the default behaviour. Hit any of the links below for more details on how
 to use!
 
-- Clipboard
+- Clipboard (Default)
+- None (Disables all editor functionality)
 - [Neovim](https://github.com/dustinblackman/oatmeal.nvim)
 
 ### Themes
 
 A handful of themes are embedded in the application for code syntax highlighting, defaulting to [OneDark](https://github.com/atom/one-dark-ui). If none suits your needs, Oatmeal supports any Sublime Text/Text Mate
-`.tmTheme` file, which can be configured through the `--theme-file` command line parameter, or the `OATMEAL_THEME_FILE`
-environment variable. [base16-textmate](https://github.com/chriskempson/base16-textmate) has plenty to pick from!
+`.tmTheme` file with the `theme-file` configuration option. [base16-textmate](https://github.com/chriskempson/base16-textmate) has plenty to pick from!
 
 ### Sessions
 
@@ -218,25 +285,16 @@ from where you left off!
 <!-- command-help-sessions start -->
 
 ```
-Manage past chat sessions
+Manage past chat sessions.
 
 Usage: oatmeal sessions [OPTIONS] [COMMAND]
 
 Commands:
-  dir     Print the sessions cache directory path
-  list    List all previous sessions with their ids and models
-  open    Open a previous session by ID. Omit passing any session ID to load an interactive selection
-  delete  Delete one or all sessions
+  dir     Print the sessions cache directory path.
+  list    List all previous sessions with their ids and models.
+  open    Open a previous session by ID. Omit passing any session ID to load an interactive selection.
+  delete  Delete one or all sessions.
   help    Print this message or the help of the given subcommand(s)
-
-Options:
-  -e, --editor <editor>              The editor to integrate with. [Possible values: clipboard, neovim] [env: OATMEAL_EDITOR=] [default: clipboard]
-  -t, --theme <theme>                Sets code syntax highlighting theme. [Possible values: base16-one-light, base16-onedark, base16-github, base16-seti, base16-monokai] [env: OATMEAL_THEME=] [default: base16-onedark]
-      --theme-file <theme-file>      Absolute path to a TextMate tmTheme to use for code syntax highlighting [env: OATMEAL_THEME_FILE=]
-      --ollama-url <ollama-url>      Ollama API URL when using the Ollama backend [env: OATMEAL_OLLAMA_URL=] [default: http://localhost:11434]
-      --openai-url <openai-url>      OpenAI API URL when using the OpenAI backend. Can be swapped to a compatiable proxy [env: OATMEAL_OPENAI_URL=] [default: https://api.openai.com]
-      --openai-token <openai-token>  OpenAI API token when using the OpenAI backend [env: OATMEAL_OPENAI_TOKEN=]
-  -h, --help                         Print help
 ```
 
 <!-- command-help-sessions end -->
@@ -246,13 +304,33 @@ nicely using [Ripgrep](https://github.com/BurntSushi/ripgrep) and [FZF](https://
 
 ```bash
 function oatmeal-sessions() {
-    current=$(pwd)
+    (
+        cd "$(oatmeal sessions dir)"
+        id=$(rg --color always -n . | fzf --ansi | awk -F ':' '{print $1}' | head -n1 | awk -F '.' '{print $1}')
+        oatmeal sessions open --id "$id"
+    )
+}
+```
 
-    cd "$(oatmeal sessions dir)"
-    id=$(rg --color always -n . | fzf --ansi | awk -F ':' '{print $1}' | head -n1 | awk -F '.' '{print $1}')
-    oatmeal sessions open --id "$id"
+Or something a little more in depth (while hacky) that additionally uses [yq](https://github.com/mikefarah/yq) and [jq](https://github.com/jqlang/jq).
 
-    cd $current
+```bash
+function oatmeal-sessions() {
+    (
+        cd "$(oatmeal sessions dir)"
+        id=$(
+          ls | \
+          (while read f; do echo "$(cat $f)\n---\n"; done;) | \
+          yq -p=yaml -o=json - 2> /dev/null | \
+          jq -s . | \
+          jq -rc '. |= sort_by(.timestamp) | .[] |  "\(.id):\(.timestamp):\(.state.backend_model):\(.state.editor_language):\(.state.messages[] | .text | tojson)"' | \
+          fzf --ansi | \
+          awk -F ':' '{print $1}' | \
+          head -n1 | \
+          awk -F '.' '{print $1}'
+        )
+        oatmeal sessions open --id "$id"
+    )
 }
 ```
 
@@ -260,14 +338,14 @@ function oatmeal-sessions() {
 
 ### Report an issue
 
-On each Oatmeal release there is a separate download to helps in reporting issues to really drill down in to what the
+On each Oatmeal release there is a separate download to help in reporting issues to really drill down in to what the
 problem is! If you've run in to a problem, I'd really help appreciate solving it.
 
 1. Head over to [releases](https://github.com/dustinblackman/oatmeal/releases) and download the DEBUG package for the
    latest release of Oatmeal.
 2. Extract the contents of the archive, and `cd` in your terminal inside the archive.
 3. Run your command with the arguments provided in the error message prefixing with `RUST_BACKTRACE=1 ./oatmeal **ARGS-HERE**`
-4. Copy/paste the output and [open an issue](https://github.com/dustinblackman/oatmeal/issues/new).
+4. Copy/paste the output and [open an issue](https://github.com/dustinblackman/oatmeal/issues/new). Include any screenshots you believe will be helpful!
 
 ### Development
 
@@ -289,9 +367,9 @@ Each backend implements the [Backend trait](./src/domain/models/backend.rs) in i
 The following steps should be completed to add a backend:
 
 1. Implement trait for new backend.
-2. Update the [BackendManager](./src/infrastructure/backends/mod.rs) to provide your new backend.
-3. Write tests
-4. Update the documentation for the [CLI](./src/application/cli.rs).
+2. Update the [BackendName](./src/domain/models/backend.rs) enum with your new Backend name.
+3. Update the [BackendManager](./src/infrastructure/backends/mod.rs) to provide your new backend.
+4. Write tests
 
 #### Adding an editor
 
@@ -300,18 +378,19 @@ Each editor implements the [Editor trait](./src/domain/models/editor.rs) in its 
 The following steps should be completed to add an editor:
 
 1. Implement trait for new editor.
-2. Update the [EditorManager](./src/infrastructure/editors/mod.rs) to provide your new editor.
-3. Write tests
-4. Update the documentation for the [CLI](./src/application/cli.rs).
+2. Update the [EditorName](./src/domain/models/editor.rs) enum with your new Editor name.
+3. Update the [EditorManager](./src/infrastructure/editors/mod.rs) to provide your new editor.
+4. Write tests
 
 #### Adding syntax highlighting for a language
 
 Syntax highlighting language selection is a tad manual where several languages must be curated and then added to
-[`build.rs`](./build.rs).
+[`assets.toml`](./assets.toml).
 
 1. Google to find a `.sublime-syntax` project on Github for your language. [bat](https://github.com/sharkdp/bat/tree/master/assets/syntaxes/02_Extra) has many!
-2. Update the `get_syntaxes()` function in [`build.rs`](./build.rs) to include the new repo. Make sure to set the URL to
-   a commit locked `.tar.gz` file, and to include the license in the files vector.
+2. Update [`assets.toml`](./assets.toml) to include the new repo. Make sure to include the license in the files array.
+   You can leave `nix-hash` as an empty string, and it'll be updated by a maintainer later. Or if you have docker
+   installed, you can run `cargo xtask hash-assets`.
 3. `rm -rf .caches && cargo build`
 4. Test to see highlighting works.
 

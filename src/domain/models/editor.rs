@@ -6,6 +6,23 @@ use std::fmt;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use strum::EnumIter;
+use strum::EnumVariantNames;
+use strum::IntoEnumIterator;
+
+#[derive(Clone, Debug, PartialEq, Eq, EnumIter, EnumVariantNames, strum::Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum EditorName {
+    Neovim,
+    Clipboard,
+    None,
+}
+
+impl EditorName {
+    pub fn parse(text: String) -> Option<EditorName> {
+        return EditorName::iter().find(|e| return e.to_string() == text);
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum AcceptType {
@@ -59,6 +76,9 @@ File: {file_path}
 
 #[async_trait]
 pub trait Editor {
+    /// Returns the name of the editor.
+    fn name(&self) -> EditorName;
+
     /// Used at startup to verify all configurations are available to work with
     /// the editor.
     async fn health_check(&self) -> Result<()>;
@@ -81,3 +101,5 @@ pub trait Editor {
         accept_type: AcceptType,
     ) -> Result<()>;
 }
+
+pub type EditorBox = Box<dyn Editor + Send + Sync>;

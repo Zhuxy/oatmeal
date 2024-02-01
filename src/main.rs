@@ -2,34 +2,32 @@
 #![allow(clippy::needless_return)]
 
 mod application;
-mod config;
+mod configuration;
 mod domain;
 mod infrastructure;
 
 use std::env;
 use std::process;
 
-use anyhow::anyhow;
 use anyhow::Error;
-use anyhow::Result;
 use domain::models::Action;
+use domain::models::BackendName;
 use domain::models::Event;
 use domain::services::clipboard::ClipboardService;
+use infrastructure::backends::BackendManager;
 use tokio::sync::mpsc;
 use tokio::task;
 use yansi::Paint;
 
 use crate::application::cli;
 use crate::application::ui;
+use crate::configuration::Config;
+use crate::configuration::ConfigKey;
 use crate::domain::services::actions::ActionsService;
 
-async fn flatten<T>(handle: task::JoinHandle<Result<T>>) -> Result<()> {
-    return match handle.await {
-        Ok(Ok(_result)) => Ok(()),
-        Ok(Err(err)) => Err(err),
-        Err(err) => Err(anyhow!(format!("Failed flatten handle: {:?}", err))),
-    };
-}
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn handle_error(err: Error) {
     eprintln!(
@@ -68,8 +66,18 @@ async fn main() {
         better_panic::Settings::auto().create_panic_handler()(panic_info);
     }));
 
-    let file_appender =
-        tracing_appender::rolling::never(dirs::cache_dir().unwrap().join("oatmeal"), "debug.log");
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
+
+    let debug_log_dir = env::var("OATMEAL_LOG_DIR").unwrap_or_else(|_| {
+        return dirs::cache_dir()
+            .unwrap()
+            .join("oatmeal")
+            .to_string_lossy()
+            .to_string();
+    });
+
+    let file_appender = tracing_appender::rolling::never(debug_log_dir, "debug.log");
     let (writer, _guard) = tracing_appender::non_blocking(file_appender);
     if env::var("RUST_LOG")
         .unwrap_or_else(|_| return "".to_string())
@@ -94,17 +102,29 @@ async fn main() {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel::<Action>();
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
 
-    let actions_future = tokio::spawn(async move {
-        return ActionsService::start(event_tx, &mut action_rx).await;
+    let mut background_futures = task::JoinSet::new();
+    background_futures.spawn(async move {
+        let backend = BackendName::parse(Config::get(ConfigKey::Backend)).unwrap();
+        return ActionsService::start(
+            BackendManager::get(backend).unwrap(),
+            event_tx,
+            &mut action_rx,
+        )
+        .await;
     });
-    let clipboard_future = tokio::spawn(async move {
-        return ClipboardService::start().await;
-    });
+
+    if let Err(clipboard_err) = ClipboardService::healthcheck() {
+        tracing::warn!(err = ?clipboard_err, "Clipboard service is unable to start")
+    } else {
+        background_futures.spawn(async move {
+            return ClipboardService::start().await;
+        });
+    }
+
     let ui_future = ui::start(action_tx, event_rx);
 
     let res = tokio::select!(
-        res = flatten(actions_future) => res,
-        res = flatten(clipboard_future) => res,
+        res = background_futures.join_next() => res.unwrap().unwrap(),
         res = ui_future => res,
     );
 
@@ -112,6 +132,9 @@ async fn main() {
         ui::destruct_terminal_for_panic();
         handle_error(res.unwrap_err());
     }
+
+    #[cfg(feature = "dhat-heap")]
+    drop(_profiler);
 
     process::exit(0);
 }

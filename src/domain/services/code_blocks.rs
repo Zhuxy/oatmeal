@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::anyhow;
 use anyhow::Result;
 
 use crate::domain::models::Message;
@@ -45,13 +45,22 @@ impl CodeBlocks {
                 let trimmed = arg.trim();
                 if trimmed.contains("..") {
                     let split = trimmed.split("..").collect::<Vec<&str>>();
-                    let first = self.validate_index(split[0].parse::<usize>()? - 1)?;
-                    let last = self.validate_index(split[1].parse::<usize>()?)?;
+                    let first = self.validate_index(split[0])? - 1;
+                    let last = self.validate_index(split[1])?;
 
                     indexes.extend_from_slice(&(first..last).collect::<Vec<usize>>())
                 } else {
-                    indexes.push(self.validate_index(e.parse::<usize>()? - 1)?)
+                    indexes.push(self.validate_index(e)? - 1);
                 }
+            }
+        }
+
+        for index in indexes.clone() {
+            if self.codeblocks.get(index).is_none() {
+                return Err(anyhow!(format!(
+                    "Code block index {} is not valid",
+                    index + 1
+                )));
             }
         }
 
@@ -64,10 +73,11 @@ impl CodeBlocks {
         return Ok(res);
     }
 
-    fn validate_index(&self, idx: usize) -> Result<usize> {
-        if idx > self.codeblocks.len() {
-            bail!(format!("{idx} is out of bounds."))
+    fn validate_index(&self, entry: &str) -> Result<usize> {
+        let res = entry.parse::<usize>()?;
+        if res == 0 {
+            return Err(anyhow!(format!("Code block index 0 is not valid")));
         }
-        return Ok(idx);
+        return Ok(res);
     }
 }

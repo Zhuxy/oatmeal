@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[path = "noop_test.rs"]
+mod tests;
+
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -6,23 +10,17 @@ use crate::domain::models::AcceptType;
 use crate::domain::models::Editor;
 use crate::domain::models::EditorContext;
 use crate::domain::models::EditorName;
-use crate::domain::services::clipboard::ClipboardService;
 
 #[derive(Default)]
-pub struct Clipboard {}
+pub struct NoopEditor {}
 
 #[async_trait]
-impl Editor for Clipboard {
+impl Editor for NoopEditor {
     fn name(&self) -> EditorName {
-        return EditorName::Clipboard;
+        return EditorName::None;
     }
-
     #[allow(clippy::implicit_return)]
     async fn health_check(&self) -> Result<()> {
-        if let Err(err) = ClipboardService::healthcheck() {
-            return Err(anyhow! {format!("Clipboard editor failed to initialize: {err}")});
-        }
-
         return Ok(());
     }
 
@@ -40,10 +38,11 @@ impl Editor for Clipboard {
     async fn send_codeblock<'a>(
         &self,
         _context: EditorContext,
-        codeblock: String,
+        _codeblock: String,
         _accept_type: AcceptType,
     ) -> Result<()> {
-        ClipboardService::set(codeblock)?;
-        return Ok(());
+        return Err(anyhow!(
+            "None/noop editor does not support copying codeblocks. Consider using the 'clipboard' editor instead"
+        ));
     }
 }

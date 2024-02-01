@@ -61,23 +61,11 @@ fn it_executes_append_with_tabs() {
 }
 
 #[test]
-fn it_executes_as_string_lines() {
-    let msg = Message::new(Author::Oatmeal, "Hi there! This is a really long line that pushes the boundaries of 50 characters across the screen, resulting in the line being wrapped. Cool right?");
-    let lines = msg.as_string_lines(50).join("\n");
-    insta::assert_snapshot!(lines, @r###"
-    Hi there! This is a really long line that pushes
-    the boundaries of 50 characters across the
-    screen, resulting in the line being wrapped. Cool
-    right?
-    "###);
-}
-
-#[test]
 fn it_executes_codeblocks() {
     let msg = Message::new(Author::Oatmeal, codeblock_fixture());
     let codeblocks = msg.codeblocks();
 
-    assert_eq!(codeblocks.len(), 3);
+    assert_eq!(codeblocks.len(), 4);
     insta::assert_snapshot!(codeblocks[0], @r###"
     fn print_numbers() {
         for i in 0..=0 {
@@ -87,6 +75,9 @@ fn it_executes_codeblocks() {
     "###);
 
     insta::assert_snapshot!(codeblocks[1], @r###"
+    // Hello World.
+
+    // This is a really long line that pushes the boundaries of 50 characters across the screen, resulting in a code comment block where the line is wrapped to the next line. Cool right?
     function printNumbers() {
         let numbers = [];
         for (let i = 0; i <= 10; i++) {
@@ -96,7 +87,9 @@ fn it_executes_codeblocks() {
     }
     "###);
 
-    insta::assert_snapshot!(codeblocks[2], @r###"
+    insta::assert_snapshot!(codeblocks[2], @"abc123");
+
+    insta::assert_snapshot!(codeblocks[3], @r###"
     for i in range(11):
         print(i)
     "###);

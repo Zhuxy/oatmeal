@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
+use ratatui::prelude::Buffer;
 use ratatui::prelude::Rect;
 use ratatui::text::Line;
-use ratatui::widgets::Block;
-use ratatui::widgets::Paragraph;
-use ratatui::Frame;
 use syntect::highlighting::Theme;
 
 use super::Bubble;
@@ -18,14 +16,14 @@ mod tests;
 
 struct BubbleCacheEntry<'a> {
     codeblocks_count: usize,
-    text: String,
+    text_len: usize,
     lines: Vec<Line<'a>>,
 }
 
 pub struct BubbleList<'a> {
     cache: HashMap<usize, BubbleCacheEntry<'a>>,
     line_width: usize,
-    lines: Vec<Line<'a>>,
+    lines_len: usize,
     theme: Theme,
 }
 
@@ -34,7 +32,7 @@ impl<'a> BubbleList<'a> {
         return BubbleList {
             cache: HashMap::new(),
             line_width: 0,
-            lines: vec![],
+            lines_len: 0,
             theme,
         };
     }
@@ -46,18 +44,15 @@ impl<'a> BubbleList<'a> {
         }
 
         let mut total_codeblock_counter = 0;
-        self.lines = messages
+        self.lines_len = messages
             .iter()
-            .filter(|message| {
-                return !message.text.is_empty();
-            })
             .enumerate()
-            .flat_map(|(idx, message)| {
+            .map(|(idx, message)| {
                 if self.cache.contains_key(&idx) {
                     let cache_entry = self.cache.get(&idx).unwrap();
-                    if message.text == cache_entry.text {
+                    if idx < (messages.len() - 1) || message.text.len() == cache_entry.text_len {
                         total_codeblock_counter += cache_entry.codeblocks_count;
-                        return cache_entry.lines.to_owned();
+                        return cache_entry.lines.len();
                     }
                 }
 
@@ -66,9 +61,9 @@ impl<'a> BubbleList<'a> {
                     align = BubbleAlignment::Right;
                 }
 
-                let bubble_lines =
-                    Bubble::new(message.clone(), align, line_width, total_codeblock_counter)
-                        .as_lines(&self.theme);
+                let bubble_lines = Bubble::new(message, align, line_width, total_codeblock_counter)
+                    .as_lines(&self.theme);
+                let bubble_line_len = bubble_lines.len();
 
                 let codeblocks_count = message.codeblocks().len();
                 total_codeblock_counter += codeblocks_count;
@@ -77,26 +72,46 @@ impl<'a> BubbleList<'a> {
                     idx,
                     BubbleCacheEntry {
                         codeblocks_count,
-                        text: message.text.to_string(),
-                        lines: bubble_lines.to_owned(),
+                        text_len: message.text.len(),
+                        lines: bubble_lines,
                     },
                 );
 
-                return bubble_lines;
+                return bubble_line_len;
             })
-            .collect::<Vec<Line>>();
+            .sum();
     }
 
     pub fn len(&self) -> usize {
-        return self.lines.len();
+        return self.lines_len;
     }
 
-    pub fn render(&mut self, frame: &mut Frame, rect: Rect, scroll: usize) {
-        frame.render_widget(
-            Paragraph::new(self.lines.to_owned())
-                .block(Block::default())
-                .scroll((scroll.try_into().unwrap(), 0)),
-            rect,
-        );
+    pub fn render(&self, rect: Rect, buf: &mut Buffer, scroll_index: u16) {
+        let mut cache_keys: Vec<usize> = self.cache.keys().cloned().collect();
+        cache_keys.sort();
+
+        let mut line_idx = 0;
+        let mut should_break = false;
+
+        for cache_key in cache_keys {
+            for line in self.cache.get(&cache_key).unwrap().lines.as_slice() {
+                if line_idx < scroll_index {
+                    line_idx += 1;
+                    continue;
+                }
+
+                if (line_idx - scroll_index) >= rect.height {
+                    should_break = true;
+                    break;
+                }
+
+                buf.set_line(0, line_idx - scroll_index, line, rect.width);
+                line_idx += 1;
+            }
+
+            if should_break {
+                break;
+            }
+        }
     }
 }

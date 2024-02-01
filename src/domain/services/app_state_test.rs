@@ -8,14 +8,19 @@ use super::AppState;
 use crate::domain::models::AcceptType;
 use crate::domain::models::Action;
 use crate::domain::models::Author;
+use crate::domain::models::BackendName;
 use crate::domain::models::BackendResponse;
+use crate::domain::models::EditorName;
 use crate::domain::models::Message;
 use crate::domain::models::MessageType;
+use crate::domain::services::AppStateProps;
 use crate::domain::services::BubbleList;
 use crate::domain::services::CodeBlocks;
 use crate::domain::services::Scroll;
 use crate::domain::services::Sessions;
 use crate::domain::services::Themes;
+use crate::infrastructure::backends::BackendManager;
+use crate::infrastructure::editors::EditorManager;
 
 impl Default for AppState<'static> {
     fn default() -> AppState<'static> {
@@ -31,6 +36,7 @@ impl Default for AppState<'static> {
             messages: vec![],
             session_id: "test".to_string(),
             scroll: Scroll::default(),
+            sessions_service: Sessions::default(),
             waiting_for_backend: false,
         };
     }
@@ -179,7 +185,7 @@ mod handle_slash_commands {
         insta::assert_snapshot!(last_message.text, @r###"
         There was an error trying to parse your command:
 
-        999 is out of bounds.
+        Code block index 1000 is not valid
         "###);
 
         return Ok(());
@@ -250,27 +256,37 @@ mod init {
 
     #[tokio::test]
     async fn it_inits_and_reloads_from_session() -> Result<()> {
-        let app_state = AppState::new(
-            "ollama",
-            "clipboard",
-            "codellama:latest",
-            "base16-onedark",
-            "",
-            "",
-        )
+        let backend = BackendManager::get(BackendName::Ollama)?;
+        let editor = EditorManager::get(EditorName::None)?;
+        let sessions_dir = tempfile::tempdir()?.into_path();
+
+        let app_state = AppState::new(AppStateProps {
+            backend,
+            editor,
+            model_name: "codellama:latest".to_string(),
+            theme_name: "base16-onedark".to_string(),
+            theme_file: "".to_string(),
+            session_id: None,
+            sessions_service: Sessions::new(sessions_dir.clone()),
+        })
         .await?;
         app_state.save_session().await?;
+
         let session_id = app_state.session_id;
-        AppState::new(
-            "ollama",
-            "clipboard",
-            "codellama:latest",
-            "base16-onedark",
-            "",
-            &session_id,
-        )
+        let backend = BackendManager::get(BackendName::Ollama)?;
+        let editor = EditorManager::get(EditorName::None)?;
+
+        AppState::new(AppStateProps {
+            backend,
+            editor,
+            model_name: "codellama:latest".to_string(),
+            theme_name: "base16-onedark".to_string(),
+            theme_file: "".to_string(),
+            session_id: Some(session_id.to_string()),
+            sessions_service: Sessions::new(sessions_dir.clone()),
+        })
         .await?;
-        Sessions::default().delete(&session_id).await?;
+        Sessions::new(sessions_dir).delete(&session_id).await?;
 
         return Ok(());
     }

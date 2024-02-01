@@ -4,8 +4,8 @@ use test_utils::insta_snapshot;
 
 use super::Bubble;
 use super::BubbleAlignment;
-use crate::config::Config;
-use crate::config::ConfigKey;
+use crate::configuration::Config;
+use crate::configuration::ConfigKey;
 use crate::domain::models::Author;
 use crate::domain::models::Message;
 use crate::domain::services::Themes;
@@ -17,11 +17,11 @@ fn create_lines(
     text: &str,
 ) -> Result<String> {
     Config::set(ConfigKey::Username, "testuser");
-    Config::set(ConfigKey::Model, "codellama:latest");
+    Config::set(ConfigKey::Model, "model-1");
 
     let message = Message::new(author, text);
     let theme = Themes::get("base16-seti", "")?;
-    let lines = Bubble::new(message, alignment, 50, codeblock_count).as_lines(&theme);
+    let lines = Bubble::new(&message, alignment, 50, codeblock_count).as_lines(&theme);
     let lines_str = lines
         .iter()
         .map(|line| {
@@ -56,13 +56,13 @@ fn it_creates_author_oatmeal_text() -> Result<()> {
 fn it_creates_author_oatmeal_text_long() -> Result<()> {
     let lines_str = create_lines(Author::Oatmeal, BubbleAlignment::Left, 0, "Hi there! This is a really long line that pushes the boundaries of 50 characters across the screen, resulting in a bubble where the line is wrapped to the next line. Cool right?")?;
     insta::assert_snapshot!(lines_str, @r###"
-    ╭Oatmeal────────────────────────────────────╮ 
-    │ Hi there! This is a really long line that │ 
-    │ pushes the boundaries of 50 characters    │ 
-    │ across the screen, resulting in a bubble  │ 
-    │ where the line is wrapped to the next     │ 
-    │ line. Cool right?                         │ 
-    ╰───────────────────────────────────────────╯ 
+    ╭Oatmeal──────────────────────────────────────╮
+    │ Hi there! This is a really long line that   │
+    │ pushes the boundaries of 50 characters      │
+    │ across the screen, resulting in a bubble    │
+    │ where the line is wrapped to the next line. │
+    │ Cool right?                                 │
+    ╰─────────────────────────────────────────────╯
     "###);
 
     return Ok(());
@@ -84,7 +84,7 @@ fn print_numbers() {
     let lines_str = create_lines(Author::Model, BubbleAlignment::Left, 0, text)?;
 
     insta::assert_snapshot!(lines_str, @r###"
-    ╭codellama:latest──────────────╮              
+    ╭model-1───────────────────────╮              
     │ Here's how to print in Rust. │              
     │                              │              
     │ ```rust (1)                  │              
@@ -113,9 +113,9 @@ fn it_creates_author_model_text_code_multiple_blocks() -> Result<()> {
 fn it_creates_author_model_text() -> Result<()> {
     let lines_str = create_lines(Author::Model, BubbleAlignment::Left, 0, "Hi there!")?;
     insta::assert_snapshot!(lines_str, @r###"
-    ╭codellama:latest──╮                          
-    │ Hi there!        │                          
-    ╰──────────────────╯                          
+    ╭model-1────╮                                 
+    │ Hi there! │                                 
+    ╰───────────╯                                 
     "###);
 
     return Ok(());

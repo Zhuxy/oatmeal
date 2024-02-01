@@ -1,9 +1,21 @@
+targets = [
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "aarch64-unknown-linux-gnu" },
+  { triple = "x86_64-unknown-linux-musl" },
+  { triple = "aarch64-unknown-linux-musl" },
+  { triple = "x86_64-apple-darwin" },
+  { triple = "aarch64-apple-darwin" },
+  { triple = "x86_64-pc-windows-msvc" },
+  { triple = "aarch64-pc-windows-msvc" },
+]
+
 [advisories]
 git-fetch-with-cli = true
 
 [licenses]
 unlicensed = "deny"
 copyleft = "deny"
+confidence-threshold = 0.93
 allow = [
   "MIT",
   "Apache-2.0",
@@ -14,6 +26,9 @@ exceptions = [
   { allow = ["BSL-1.0"], name = "clipboard-win" },
   { allow = ["BSL-1.0"], name = "error-code" },
   { allow = ["BSL-1.0"], name = "str-buf" },
+  { allow = ["MIT", "ISC", "OpenSSL"], name = "ring" },
+  { allow = ["ISC"], name = "rustls-webpki" },
+  { allow = ["ISC"], name = "untrusted" },
 ]
 
 [[licenses.clarify]]

@@ -1,26 +1,25 @@
+use std::collections::HashMap;
+
 use anyhow::bail;
 use anyhow::Result;
-use test_utils::insta_snapshot;
 use tokio::sync::mpsc;
 
-use super::CompletionChoiceResponse;
-use super::CompletionDeltaResponse;
 use super::CompletionResponse;
-use super::MessageRequest;
-use super::Model;
-use super::ModelListResponse;
-use super::OpenAI;
+use super::LangChain;
+use crate::configuration::Config;
+use crate::configuration::ConfigKey;
 use crate::domain::models::Author;
 use crate::domain::models::Backend;
 use crate::domain::models::BackendPrompt;
 use crate::domain::models::BackendResponse;
 use crate::domain::models::Event;
+use crate::infrastructure::backends::langchain::Empty;
+use crate::infrastructure::backends::langchain::OpenAPIJSONResponse;
 
-impl OpenAI {
-    fn with_url(url: String) -> OpenAI {
-        return OpenAI {
+impl LangChain {
+    fn with_url(url: String) -> LangChain {
+        return LangChain {
             url,
-            token: "abc".to_string(),
             timeout: "200".to_string(),
         };
     }
@@ -38,9 +37,12 @@ fn to_res(action: Option<Event>) -> Result<BackendResponse> {
 #[tokio::test]
 async fn it_successfully_health_checks() {
     let mut server = mockito::Server::new();
-    let mock = server.mock("GET", "/").with_status(200).create();
+    let mock = server
+        .mock("GET", "/openapi.json")
+        .with_status(200)
+        .create();
 
-    let backend = OpenAI::with_url(server.url());
+    let backend = LangChain::with_url(server.url());
     let res = backend.health_check().await;
 
     assert!(res.is_ok());
@@ -48,19 +50,14 @@ async fn it_successfully_health_checks() {
 }
 
 #[tokio::test]
-async fn it_successfully_health_checks_with_official_api() {
-    let backend = OpenAI::with_url("https://api.openai.com".to_string());
-    let res = backend.health_check().await;
-
-    assert!(res.is_ok());
-}
-
-#[tokio::test]
 async fn it_fails_health_checks() {
     let mut server = mockito::Server::new();
-    let mock = server.mock("GET", "/").with_status(500).create();
+    let mock = server
+        .mock("GET", "/openapi.json")
+        .with_status(500)
+        .create();
 
-    let backend = OpenAI::with_url(server.url());
+    let backend = LangChain::with_url(server.url());
     let res = backend.health_check().await;
 
     assert!(res.is_err());
@@ -69,81 +66,69 @@ async fn it_fails_health_checks() {
 
 #[tokio::test]
 async fn it_lists_models() -> Result<()> {
-    let body = serde_json::to_string(&ModelListResponse {
-        data: vec![
-            Model {
-                id: "first".to_string(),
-            },
-            Model {
-                id: "second".to_string(),
-            },
-        ],
-    })?;
+    let mut paths = HashMap::new();
+    paths.insert("/model-1/stream".to_string(), Empty {});
+    paths.insert("/model-2/stream".to_string(), Empty {});
+    paths.insert("/model-2/{config_hash}/stream".to_string(), Empty {});
+    paths.insert("/other".to_string(), Empty {});
+    let body = serde_json::to_string(&OpenAPIJSONResponse { paths })?;
 
     let mut server = mockito::Server::new();
     let mock = server
-        .mock("GET", "/v1/models")
-        .match_header("Authorization", "Bearer abc")
+        .mock("GET", "/openapi.json")
         .with_status(200)
         .with_body(body)
         .create();
 
-    let backend = OpenAI::with_url(server.url());
+    let backend = LangChain::with_url(server.url());
     let res = backend.list_models().await?;
     mock.assert();
 
-    assert_eq!(res, vec!["first".to_string(), "second".to_string()]);
+    assert_eq!(res, vec!["model-1".to_string(), "model-2".to_string()]);
 
     return Ok(());
 }
 
 #[tokio::test]
 async fn it_gets_completions() -> Result<()> {
+    Config::set(ConfigKey::Model, "model-1");
+
     let first_line = serde_json::to_string(&CompletionResponse {
-        choices: vec![CompletionChoiceResponse {
-            delta: CompletionDeltaResponse {
-                content: Some("Hello ".to_string()),
-            },
-            finish_reason: None,
-        }],
+        status_code: None,
+        message: None,
+        content: Some("Hello ".to_string()),
     })?;
 
     let second_line = serde_json::to_string(&CompletionResponse {
-        choices: vec![CompletionChoiceResponse {
-            delta: CompletionDeltaResponse {
-                content: Some("World".to_string()),
-            },
-            finish_reason: None,
-        }],
+        status_code: None,
+        message: None,
+        content: Some("World".to_string()),
     })?;
 
-    let third_line = serde_json::to_string(&CompletionResponse {
-        choices: vec![CompletionChoiceResponse {
-            delta: CompletionDeltaResponse { content: None },
-            finish_reason: Some("stop".to_string()),
-        }],
-    })?;
-
-    let body = [first_line, second_line, third_line].join("\n");
+    let body = [
+        "event: garbadge",
+        "",
+        &format!("data: {first_line}"),
+        "event: garbadge",
+        &format!("data: {second_line}"),
+        "",
+    ]
+    .join("\n");
     let prompt = BackendPrompt {
         text: "Say hi to the world".to_string(),
-        backend_context: serde_json::to_string(&vec![MessageRequest {
-            role: "assistant".to_string(),
-            content: "How may I help you?".to_string(),
-        }])?,
+        backend_context: "".to_string(),
     };
 
     let mut server = mockito::Server::new();
     let mock = server
-        .mock("POST", "/v1/chat/completions")
-        .match_header("Authorization", "Bearer abc")
+        .mock("POST", "/model-1/stream")
         .with_status(200)
         .with_body(body)
         .create();
 
     let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
 
-    let backend = OpenAI::with_url(server.url());
+    let backend = LangChain::with_url(server.url());
     backend.get_completion(prompt, &tx).await?;
 
     mock.assert();
@@ -165,9 +150,7 @@ async fn it_gets_completions() -> Result<()> {
     assert_eq!(third_recv.author, Author::Model);
     assert!(third_recv.text.is_empty());
     assert!(third_recv.done);
-    insta_snapshot(|| {
-        insta::assert_toml_snapshot!(third_recv.context);
-    });
+    assert_eq!(third_recv.context, Some("not-supported".to_string()));
 
     return Ok(());
 }

@@ -9,8 +9,8 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
-use crate::config::Config;
-use crate::config::ConfigKey;
+use crate::configuration::Config;
+use crate::configuration::ConfigKey;
 use crate::domain::models::Author;
 use crate::domain::models::EditorContext;
 use crate::domain::models::Message;
@@ -25,11 +25,15 @@ impl Default for Sessions {
     fn default() -> Sessions {
         let cache_dir = dirs::cache_dir().unwrap().join("oatmeal/sessions");
 
-        return Sessions { cache_dir };
+        return Sessions::new(cache_dir);
     }
 }
 
 impl Sessions {
+    pub fn new(cache_dir: path::PathBuf) -> Sessions {
+        return Sessions { cache_dir };
+    }
+
     pub fn create_id() -> String {
         return Uuid::new_v4()
             .to_string()

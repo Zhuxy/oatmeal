@@ -1,13 +1,16 @@
 #[cfg(test)]
-#[path = "openai_test.rs"]
+#[path = "langchain_test.rs"]
 mod tests;
 
+use std::collections::HashMap;
 use std::time::Duration;
 
+use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
+use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::io::AsyncBufReadExt;
@@ -29,96 +32,66 @@ fn convert_err(err: reqwest::Error) -> std::io::Error {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct Model {
-    id: String,
-}
+struct Empty {}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ModelListResponse {
-    data: Vec<Model>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct MessageRequest {
-    role: String,
-    content: String,
+struct OpenAPIJSONResponse {
+    paths: HashMap<String, Empty>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct CompletionRequest {
-    model: String,
-    messages: Vec<MessageRequest>,
-    stream: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct CompletionDeltaResponse {
-    content: Option<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct CompletionChoiceResponse {
-    delta: CompletionDeltaResponse,
-    finish_reason: Option<String>,
+    input: HashMap<String, String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct CompletionResponse {
-    choices: Vec<CompletionChoiceResponse>,
+    status_code: Option<i32>,
+    message: Option<String>,
+    content: Option<String>,
 }
 
-pub struct OpenAI {
+pub struct LangChain {
     url: String,
-    token: String,
     timeout: String,
 }
 
-impl Default for OpenAI {
-    fn default() -> OpenAI {
-        return OpenAI {
-            url: Config::get(ConfigKey::OpenAiURL),
-            token: Config::get(ConfigKey::OpenAiToken),
+impl Default for LangChain {
+    fn default() -> LangChain {
+        return LangChain {
+            url: Config::get(ConfigKey::LangChainURL),
             timeout: Config::get(ConfigKey::BackendHealthCheckTimeout),
         };
     }
 }
 
 #[async_trait]
-impl Backend for OpenAI {
+impl Backend for LangChain {
     fn name(&self) -> BackendName {
-        return BackendName::OpenAI;
+        return BackendName::LangChain;
     }
 
     #[allow(clippy::implicit_return)]
     async fn health_check(&self) -> Result<()> {
         if self.url.is_empty() {
-            bail!("OpenAI URL is not defined");
-        }
-        if self.token.is_empty() {
-            bail!("OpenAI token is not defined");
-        }
-
-        // OpenAI are trolls with their API where the index either returns a 404 or a
-        // 418. If using the official API, don't bother health checking it.
-        if self.url == "https://api.openai.com" {
-            return Ok(());
+            bail!("LangChain URL is not defined");
         }
 
         let res = reqwest::Client::new()
-            .get(&self.url)
+            .get(format!("{url}/openapi.json", url = self.url))
             .timeout(Duration::from_millis(self.timeout.parse::<u64>()?))
             .send()
             .await;
 
         if res.is_err() {
-            tracing::error!(error = ?res.unwrap_err(), "OpenAI is not reachable");
-            bail!("OpenAI is not reachable");
+            tracing::error!(error = ?res.unwrap_err(), "LangChain is not reachable");
+            bail!("LangChain is not reachable");
         }
 
         let status = res.unwrap().status().as_u16();
         if status >= 400 {
-            tracing::error!(status = status, "OpenAI health check failed");
-            bail!("OpenAI health check failed");
+            tracing::error!(status = status, "LangChain health check failed");
+            bail!("LangChain health check failed");
         }
 
         return Ok(());
@@ -127,20 +100,25 @@ impl Backend for OpenAI {
     #[allow(clippy::implicit_return)]
     async fn list_models(&self) -> Result<Vec<String>> {
         let res = reqwest::Client::new()
-            .get(format!("{url}/v1/models", url = self.url))
-            .header("Authorization", format!("Bearer {}", self.token))
+            .get(format!("{url}/openapi.json", url = self.url))
             .send()
             .await?
-            .json::<ModelListResponse>()
+            .json::<OpenAPIJSONResponse>()
             .await?;
 
-        let mut models: Vec<String> = res
-            .data
-            .iter()
-            .map(|model| {
-                return model.id.to_string();
+        let mut models = res
+            .paths
+            .keys()
+            .filter_map(|url_path| {
+                if !url_path.ends_with("/stream") || url_path.contains("{config_hash}") {
+                    return None;
+                }
+
+                let model = url_path.replace("/stream", "");
+                return Some(model[1..model.len()].to_string());
             })
-            .collect();
+            .unique()
+            .collect::<Vec<String>>();
 
         models.sort();
 
@@ -153,24 +131,18 @@ impl Backend for OpenAI {
         prompt: BackendPrompt,
         tx: &'a mpsc::UnboundedSender<Event>,
     ) -> Result<()> {
-        let mut messages: Vec<MessageRequest> = vec![];
-        if !prompt.backend_context.is_empty() {
-            messages = serde_json::from_str(&prompt.backend_context)?;
-        }
-        messages.push(MessageRequest {
-            role: "user".to_string(),
-            content: prompt.text,
-        });
+        let mut input = HashMap::new();
+        // TODO consider making the key configurable.
+        input.insert("question".to_string(), prompt.text);
 
-        let req = CompletionRequest {
-            model: Config::get(ConfigKey::Model),
-            messages: messages.clone(),
-            stream: true,
-        };
+        let req = CompletionRequest { input };
 
         let res = reqwest::Client::new()
-            .post(format!("{url}/v1/chat/completions", url = self.url))
-            .header("Authorization", format!("Bearer {}", self.token))
+            .post(format!(
+                "{url}/{model}/stream",
+                url = self.url,
+                model = Config::get(ConfigKey::Model)
+            ))
             .json(&req)
             .send()
             .await?;
@@ -178,65 +150,53 @@ impl Backend for OpenAI {
         if !res.status().is_success() {
             tracing::error!(
                 status = res.status().as_u16(),
-                "Failed to make completion request to OpenAI"
+                "Failed to make completion request to LangChain"
             );
-            bail!("Failed to make completion request to OpenAI");
+            bail!("Failed to make completion request to LangChain");
         }
 
         let stream = res.bytes_stream().map_err(convert_err);
         let mut lines_reader = StreamReader::new(stream).lines();
 
-        let mut last_message = "".to_string();
         while let Ok(line) = lines_reader.next_line().await {
             if line.is_none() {
                 break;
             }
-
             let mut cleaned_line = line.unwrap().trim().to_string();
-            if cleaned_line.starts_with("data:") {
-                cleaned_line = cleaned_line.split_off(5).trim().to_string();
-            }
-            if cleaned_line.is_empty() {
+            if !cleaned_line.starts_with("data:") {
                 continue;
             }
-
+            cleaned_line = cleaned_line.split_off(5).trim().to_string();
             let ores: CompletionResponse = serde_json::from_str(&cleaned_line).unwrap();
-            tracing::debug!(body = ?ores, "Completion response");
 
-            let choice = &ores.choices[0];
-            if choice.finish_reason.is_some() {
-                break;
+            if let Some(status_code) = ores.status_code {
+                if status_code >= 400 {
+                    return Err(anyhow!(ores.message.unwrap()));
+                }
             }
-            if choice.delta.content.is_none() {
+
+            if ores.content.is_none() {
                 continue;
             }
-
-            let text = choice.delta.content.clone().unwrap().to_string();
+            let text = ores.content.unwrap();
             if text.is_empty() {
                 continue;
             }
 
-            last_message += &text;
             let msg = BackendResponse {
                 author: Author::Model,
                 text,
                 done: false,
                 context: None,
             };
-
             tx.send(Event::BackendPromptResponse(msg))?;
         }
-
-        messages.push(MessageRequest {
-            role: "assistant".to_string(),
-            content: last_message.to_string(),
-        });
 
         let msg = BackendResponse {
             author: Author::Model,
             text: "".to_string(),
             done: true,
-            context: Some(serde_json::to_string(&messages)?),
+            context: Some("not-supported".to_string()),
         };
         tx.send(Event::BackendPromptResponse(msg))?;
 

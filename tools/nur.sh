@@ -8,6 +8,6 @@ TMPDIR="$(mktemp -d)"
 
 cd "$TMPDIR"
 git clone --depth 1 git@github.com:dustinblackman/nur-packages.git .
-./scripts/goreleaser.sh oatmeal "$VERSION" "${DIST}/oatmeal_${VERSION}_linux_amd64.tar.gz"
+./scripts/goreleaser-v2.sh oatmeal "$VERSION" "$DIST"
 cd ~
 rm -rf "$TMPDIR"

@@ -1,3 +1,4 @@
+# Lazy priority acceptance. Real linting happens in cargo-deny before this gets run.
 accepted = [
   # Prioritized
   "MIT",
@@ -8,18 +9,22 @@ accepted = [
   "ISC",
   "Unicode-DFS-2016",
   "BSD-3-Clause",
+  "OpenSSL",
 ]
+workarounds = ["chrono", "ring", "rustls"]
 
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
 
 targets = [
-  "x86_64-apple-darwin",
-  "aarch64-apple-darwin",
   "x86_64-unknown-linux-gnu",
   "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
   "x86_64-pc-windows-msvc",
   "aarch64-pc-windows-msvc",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
 ]
 
 [x11rb.clarify]
@@ -28,13 +33,6 @@ license = "MIT"
 [[x11rb.clarify.git]]
 path = "LICENSE-MIT"
 checksum = "a72561f47c1f665535930f606739d9098a6186802d5e2e8ec491faf00f4add5b"
-
-[core-graphics-types.clarify]
-license = "MIT"
-
-[[core-graphics-types.clarify.git]]
-path = "LICENSE-MIT"
-checksum = "62065228e42caebca7e7d7db1204cbb867033de5982ca4009928915e4095f3a3"
 
 [onig.clarify]
 license = "MIT"
@@ -59,7 +57,7 @@ checksum = "35b228510156c3d7bf94b129c81b7e3cc72d347586e632be15686232b342562a"
 
 [system-configuration-sys.clarify]
 license = "MIT"
-override_git_commit = "8f82d7fd73cab9edd295ba23dcfdfdf376b27a01"
+override-git-commit = "8f82d7fd73cab9edd295ba23dcfdfdf376b27a01"
 
 [[system-configuration-sys.clarify.git]]
 path = "LICENSE-MIT"
@@ -102,7 +100,7 @@ checksum = "7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0"
 
 [malloc_buf.clarify]
 license = "MIT"
-override_git_commit = "d9a3e539642bd90e07df458d226b19cdfa606863"
+override-git-commit = "d9a3e539642bd90e07df458d226b19cdfa606863"
 
 [[malloc_buf.clarify.git]]
 path = "LICENSE"
@@ -115,16 +113,9 @@ license = "MIT"
 path = "LICENSE-MIT"
 checksum = "0593d22d122d4bfec6407115e3907546312976f75473417aaa4c57ecd2095ae6"
 
-[typenum.clarify]
-license = "MIT"
+[rustls-webpki.clarify]
+license = "ISC"
 
-[[typenum.clarify.git]]
-path = "LICENSE-MIT"
-checksum = "a825bd853ab71619a4923d7b4311221427848070ff44d990da39b0b274c1683f"
-
-[openssl.clarify]
-license = "Apache-2.0"
-
-[[openssl.clarify.git]]
-path = "openssl/LICENSE"
-checksum = "f3d4287b4a21c5176fea2f9bd4ae800696004e2fb8e05cbc818be513f188a941"
+[[rustls-webpki.clarify.git]]
+path = "LICENSE"
+checksum = "5b698ca13897be3afdb7174256fa1574f8c6892b8bea1a66dd6469d3fe27885a"
